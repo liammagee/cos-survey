@@ -13,14 +13,15 @@ export default class Assessment extends Component {
       const ctx = this.refs.canvas.getContext('2d');
       let circle, canvas, numCircles = 9, circleType = "Profile";
       const config = {
-          width: 450,
-          height: 450,
+          width: 1200,
+          height: 800,
           numCircles: numCircles,
-          drawText: true,
+          drawDomains: true,
+          drawSubdomains: true,
           axisLength: 1.2,
           axisWidth: 2,
           lineWidth: 1,
-          radiusProportion: 0.75,
+          radiusProportion: 0.4,
           font: "bold 14px sans-serif",
           rotation: 0
       };
@@ -81,7 +82,7 @@ export default class Assessment extends Component {
           {this.deleteButton()}
           {this.props.assessment.text}
           <div>
-          <canvas ref="canvas" id={this.props.assessment._id} width="450" height="450"></canvas>
+          <canvas ref="canvas" id={this.props.assessment._id} width="1200" height="800"></canvas>
           </div>
           <div style={{float: 'right', font: 'bold 14px sans-serif'}} id={"tooltip-" + this.props.assessment._id}>
           </div>
@@ -111,11 +112,15 @@ Assessment.GenericCircle = function( ctx, config ) {
     let height = config.height || 100;
     let width = config.width || 100;
     let useSameArea = config.useSameArea === false ? false : true;
-    let drawText = config.drawText === false ? false : true;
+    let drawDomains = config.drawDomains === false ? false : true;
+    let drawSubdomains = config.drawSubdomains === false ? false : true;
     let radiusProportion = typeof(config.radiusProportion) !== 'undefined' ? config.radiusProportion : 0.9;
     let numCircles = config.numCircles || 9;
     this.numDomains = config.numDomains || 4;
     this.numSubdomains = config.numSubdomains || 7;
+
+    this.currentDomainId = -1;
+    this.currentSubdomainId = -1;
 
     this.values = config.values || [];
     let rotation = typeof(config.rotation) !== 'undefined' ? config.rotation : 0;
@@ -300,7 +305,7 @@ Assessment.GenericCircle = function( ctx, config ) {
     }
 
 
-    this.drawText = function() {
+    this.drawDomains = function() {
         let angle = 45;
         ctx.fillStyle = Assessment.domainColour;
         for (let j = 0; j < this.domains.length; j++) {
@@ -330,6 +335,66 @@ Assessment.GenericCircle = function( ctx, config ) {
         }
     }
 
+    this.drawSubdomains = function() {
+        let angle = 45;
+        ctx.fillStyle = "black";
+        let fontSize = 15;
+        ctx.font = fontSize + "pt Arial";
+        for (let j = 0; j < this.domains.length; j++) {
+            let domain = this.domains[j];
+
+            ctx.save();
+            ctx.translate(x, y);
+
+            // let correctedAngle = (j * Math.PI / 2) - ((Math.PI / 4)) - radiusCorrection;
+            // ctx.rotate(correctedAngle);
+            let subdomains = domain.subdomains;
+            let sx = 0, sy = 0, vertDirection = -1, lineOffset = Math.round(fontSize * 1.6), vertOffset = 0;
+            switch (j) {
+                case 0:
+                  sx = -x * 0.95;
+                  sy = -y * 0.6;
+                  vertDirection = -1;
+                  vertOffset = 0;
+                  ctx.textAlign = 'left';
+                    break;
+                case 1:
+                  sx = x * 0.95;
+                  sy = -y * 0.6;
+                  vertDirection = 1;
+                  vertOffset = 0;
+                  ctx.textAlign = 'right';
+                    break;
+                case 2:
+                  sx = x * 0.95;
+                  sy = y * 0.6;
+                  vertDirection = 1;
+                  vertOffset = -lineOffset * 6;
+                  ctx.textAlign = 'right';
+                    break;
+                case 3:
+                  sx = -x * 0.95;
+                  sy = y * 0.6;
+                  vertDirection = -1;
+                  vertOffset = -lineOffset * 6;
+                  ctx.textAlign = 'left';
+                    break;
+            }
+            for (i = 0; i < subdomains.length; i++) {
+              let index = vertDirection == -1 ? 6 - i : i;
+              let text = subdomains[ index ];
+              ctx.save();
+              if ( this.currentSubdomainId == index && this.currentDomainId == j )
+                ctx.fillStyle = Assessment.domainColour;
+              else
+                ctx.fillStyle = "black";
+              ctx.fillText(text, sx, sy + vertOffset + (i * lineOffset));
+              ctx.restore();
+            }
+            ctx.restore();
+        }
+    }
+
 
     this.drawCompleteCircle = function() {
         // Draw segments lines
@@ -345,8 +410,14 @@ Assessment.GenericCircle = function( ctx, config ) {
         this.drawSegmentLines();
         this.drawCircles();
         this.drawAxes();
-        if (drawText)
-            this.drawText();
+
+        if (drawDomains) {
+          this.drawDomains();
+        }
+
+        if (drawSubdomains) {
+          this.drawSubdomains();
+        }
     }
 
     this.updateCircleSegment = function(domainId, subdomainId, extent) {
@@ -407,6 +478,11 @@ Assessment.GenericCircle = function( ctx, config ) {
             }
             callback(quadrant, currentDomain.name, subdomainId, currentSubdomain, oldValue, newValue);
         }
+        else {
+          this.currentDomainId = -1;
+          this.currentSubdomainId = -1;
+          this.drawCompleteCircle();
+        }
     }
 
 
@@ -436,6 +512,11 @@ Assessment.GenericCircle = function( ctx, config ) {
     this.showSubdomain = function(domainId, domainName, subdomainId, subdomainName, oldValue, newValue) {
         jQuery("#tooltip-" + circle.assessment.props.assessment._id).html(domainName + ": " + subdomainName);
         //circle.updateCircleSegment(domainId, subdomainId, newValue);
+        if (circle.drawSubdomains) {
+          circle.currentDomainId = domainId;
+          circle.currentSubdomainId = subdomainId;
+          circle.drawCompleteCircle();
+        }
     }
 
     this.randomise = function() {
@@ -485,6 +566,8 @@ Assessment.Profile = function(ctx, config) {
         { name: 'Politics', subdomains: ["Ethics & Accountability", "Dialogue & Reconciliation", "Security & Accord", "Representation & Negotiation", "Communication & Critique", "Law & Justice", "Organization & Governance"        ] }
         ];
 
+    config.drawDomains = false;
+    config.drawSubdomains = true;
 
     Assessment.GenericCircle.call( this, ctx, config );
 };
