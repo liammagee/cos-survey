@@ -1,17 +1,21 @@
 import React, { Component, PropTypes } from 'react';
 
 import { Assessments } from '../../api/assessments.js';
+import 'canvas2svg';
 
 
 // Task component - represents a single todo item
 export default class Assessment extends Component {
+
+
   componentDidMount() {
       this.updateCanvas();
   }
 
   updateCanvas() {
       const ctx = this.refs.canvas.getContext('2d');
-      let circle, canvas, numCircles = 9, circleType = "Profile";
+
+      let circle, canvas, numCircles = 9;
       const config = {
           width: 1200,
           height: 800,
@@ -23,10 +27,30 @@ export default class Assessment extends Component {
           lineWidth: 1,
           radiusProportion: 0.4,
           font: "bold 14px sans-serif",
-          rotation: 0
+          rotation: 0,
+          // domains: [
+          //
+          //     { name: 'Economics', subdomains: ["_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________"] },
+          //
+          //     { name: 'Ecology', subdomains: ["_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________"] },
+          //
+          //     { name: 'Culture', subdomains: ["_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________"] },
+          //
+          //     { name: 'Politics', subdomains: ["_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________", "_____________________"] }
+          //     ]
+          domains: [
+
+              { name: 'Economics', subdomains: ["Short-termism", "Future of work", "Gentrification & affordability", "Insecure, low employment", "Education", "Funding health services", "Youth as assets"] },
+
+              { name: 'Ecology', subdomains: ["Green spaces", "Ecological new developments", "Sustainable living", "Public transport", "Energy efficiency", "Environmental sustainability", "Digital spaces & capacities"] },
+
+              { name: 'Culture', subdomains: ["Problematising Youth", "Options for Health & Wellbeing", "Intergenerational knowledge", "Disparity of opportunities", "Negative stigma in mental health", "High density living", "Gentrification"] },
+
+              { name: 'Politics', subdomains: ["Will for alternative housing", "Youth influence", "Youth-friendly services", "Intergenerational tensions", "Agenda-setting bias", "Lightweight consultation", "Planning laws"        ] }
+              ]
       };
 
-      circle = new Assessment.Profile(ctx, config );
+      circle = new Assessment.Profile( ctx, config );
       circle.resetValues();
       circle.drawCompleteCircle();
       /* Event handling */
@@ -38,6 +62,7 @@ export default class Assessment extends Component {
         let s = i % 7;
         circle.updateCircleSegment(d, s, r);
       }
+      this.circle = circle;
   }
 
   deleteThisAssessment() {
@@ -45,7 +70,15 @@ export default class Assessment extends Component {
   }
 
   goToSummary() {
-    this.props.router.push('/summary')
+    this.props.router.push('/summary');
+  }
+
+  clear() {
+    this.circle.resetValues( false );
+  }
+
+  exportSVG() {
+    $('#svg-' + this.props.assessment._id).val(this.circle.ctxSVG.getSerializedSvg());
   }
 
   deleteButton() {
@@ -64,16 +97,35 @@ export default class Assessment extends Component {
   submitAssessment() {
     if (this.props.isInteractive) {
       return (
-        <div>
-          <button className="submit"  onClick={this.goToSummary.bind(this)}>
-              Submit this Assessment
-          </button>
-        </div>
+        <button className="submit"  onClick={this.goToSummary.bind(this)}>
+            Submit this Assessment
+        </button>
       )
     }
     else {
       return('')
     }
+  }
+
+  clearAssessment() {
+    if (this.props.isInteractive) {
+      return (
+        <button className="submit"  onClick={this.clear.bind(this)}>
+            Clear
+        </button>
+      )
+    }
+    else {
+      return('')
+    }
+  }
+
+  exportAssessment() {
+    return (
+      <button className="submit"  onClick={this.exportSVG.bind(this)}>
+          Export this Assessment
+      </button>
+    )
   }
 
   render() {
@@ -86,17 +138,23 @@ export default class Assessment extends Component {
           </div>
           <div style={{float: 'right', font: 'bold 14px sans-serif'}} id={"tooltip-" + this.props.assessment._id}>
           </div>
-          {this.submitAssessment()}
+          <div>
+            {this.submitAssessment()}
+            |
+            {this.clearAssessment()}
+            |
+            {this.exportAssessment()}
+          </div>
+
+          <div>
+            <textarea id={"svg-" + this.props.assessment._id} rows="10" cols="60">
+
+            </textarea>
+          </div>
         </li>
     );
   }
 }
-
-Assessment.propTypes = {
-  // This component gets the assessment to display through a React prop.
-  // We can use propTypes to indicate it is required
-  assessment: PropTypes.object.isRequired,
-};
 
 
 
@@ -107,6 +165,9 @@ Assessment.GenericCircle = function( ctx, config ) {
 
     let assessment = null;
     let circle = this;
+
+    // Create a new mock canvas context. Pass in your desired width and height for your svg document.
+    this.ctxSVG = new C2S(1200, 800);
 
     // Configurable variables
     let height = config.height || 100;
@@ -180,6 +241,13 @@ Assessment.GenericCircle = function( ctx, config ) {
     ctx.rotate(rotation * Math.PI/180);
     ctx.translate(-x, -y);
 
+    this.ctxSVG.lineWidth = config.lineWidth || 0.5;
+    this.ctxSVG.font = config.font || "18px sans-serif";
+    this.ctxSVG.translate(x, y);
+    this.ctxSVG.rotate(rotation * Math.PI/180);
+    this.ctxSVG.translate(-x, -y);
+
+
 
     this.resetValues = function( randomise ) {
         let domainValues = [];
@@ -198,6 +266,13 @@ Assessment.GenericCircle = function( ctx, config ) {
 
     this.refreshValues = function(vals) {
         this.values = vals;
+
+        if (! _.isUndefined(circle.assessment) ) {
+          Assessments.update({ _id: circle.assessment.props.assessment._id }, {
+            $set: { ratings: this.values },
+          } );
+        }
+
         this.drawCompleteCircle();
     }
 
@@ -227,12 +302,31 @@ Assessment.GenericCircle = function( ctx, config ) {
         ctx.fillStyle = '#fff';
         ctx.fill();
 
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.arc(x, y, newRad, startAngle, endAngle, false);
-        ctx.closePath();
-        ctx.fillStyle = colour;
-        ctx.fill();
+
+        if (typeof(colour) !== 'undefined') {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.arc(x, y, newRad, startAngle, endAngle, false);
+          ctx.closePath();
+          ctx.fillStyle = colour;
+          ctx.fill();
+        }
+
+        this.ctxSVG.beginPath();
+        this.ctxSVG.moveTo(x, y);
+        this.ctxSVG.arc(x, y, radius, startAngle, endAngle, false);
+        this.ctxSVG.closePath();
+        this.ctxSVG.fillStyle = '#fff';
+        this.ctxSVG.fill();
+
+        if (typeof(colour) !== 'undefined') {
+          this.ctxSVG.beginPath();
+          this.ctxSVG.moveTo(x, y);
+          this.ctxSVG.arc(x, y, newRad, startAngle, endAngle, false);
+          this.ctxSVG.closePath();
+          this.ctxSVG.fillStyle = colour;
+          this.ctxSVG.fill();
+        }
 
     }
 
@@ -261,12 +355,23 @@ Assessment.GenericCircle = function( ctx, config ) {
             for (let j = 1; j < this.numSubdomains; j ++) {
                 ctx.moveTo(x, y);
                 ctx.lineTo(x + Math.sin(quadFacLine * j  / this.numSubdomains) * dirFac * radius, y + Math.cos(quadFacLine * j  / this.numSubdomains) * dirFac * radius);
+
+                this.ctxSVG.moveTo(x, y);
+                this.ctxSVG.lineTo(x + Math.sin(quadFacLine * j  / this.numSubdomains) * dirFac * radius, y + Math.cos(quadFacLine * j  / this.numSubdomains) * dirFac * radius);
+
             }
         }
+
         ctx.closePath();
         ctx.lineWidth = 0.5;
         ctx.strokeStyle = "#444";
         ctx.stroke();
+
+        this.ctxSVG.closePath();
+        this.ctxSVG.lineWidth = 0.5;
+        this.ctxSVG.strokeStyle = "#444";
+        this.ctxSVG.stroke();
+
     }
 
     this.drawCircles = function() {
@@ -278,11 +383,20 @@ Assessment.GenericCircle = function( ctx, config ) {
             }
             ctx.moveTo(x + newRad, y);
             ctx.arc(x, y, newRad, 0, Math.PI * 2, false);
+
+            this.ctxSVG.moveTo(x + newRad, y);
+            this.ctxSVG.arc(x, y, newRad, 0, Math.PI * 2, false);
         }
+
         ctx.closePath();
         ctx.lineWidth = 0.5;
         ctx.strokeStyle = "#444";
         ctx.stroke();
+
+        this.ctxSVG.closePath();
+        this.ctxSVG.lineWidth = 0.5;
+        this.ctxSVG.strokeStyle = "#444";
+        this.ctxSVG.stroke();
 
     }
 
@@ -302,6 +416,21 @@ Assessment.GenericCircle = function( ctx, config ) {
         ctx.strokeStyle = "#444";
         ctx.stroke();
         ctx.lineWidth = oldValue;
+
+        this.ctxSVG.beginPath();
+        this.ctxSVG.moveTo(x, y);
+        this.ctxSVG.lineTo(x, y - radius * axisLength);
+        this.ctxSVG.moveTo(x, y);
+        this.ctxSVG.lineTo(x, y + radius * axisLength);
+        this.ctxSVG.moveTo(x, y);
+        this.ctxSVG.lineTo(x - radius * axisLength, y);
+        this.ctxSVG.moveTo(x, y);
+        this.ctxSVG.lineTo(x + radius * axisLength, y);
+        this.ctxSVG.closePath();
+        this.ctxSVG.lineWidth = axisWidth;
+        this.ctxSVG.strokeStyle = "#444";
+        this.ctxSVG.stroke();
+        this.ctxSVG.lineWidth = oldValue;
     }
 
 
@@ -320,8 +449,14 @@ Assessment.GenericCircle = function( ctx, config ) {
             ctx.save();
             ctx.translate(x, y);
 
+            this.ctxSVG.save();
+            this.ctxSVG.translate(x, y);
+
             let correctedAngle = (j * Math.PI / 2) - ((Math.PI / 4)) - radiusCorrection;
+
             ctx.rotate(correctedAngle);
+            this.ctxSVG.rotate(correctedAngle);
+
             for (i = 0; i < len; i++) {
                 // i / len
               ctx.save();
@@ -330,21 +465,42 @@ Assessment.GenericCircle = function( ctx, config ) {
               s = text[i];
               ctx.fillText(s, 0, 0);
               ctx.restore();
+
+              this.ctxSVG.save();
+              this.ctxSVG.rotate((i / len) * correction * (Math.PI / 2));
+              this.ctxSVG.translate(0, -1 * radius * 1.05);
+              s = text[i];
+              this.ctxSVG.fillText(s, 0, 0);
+              this.ctxSVG.restore();
+
             }
+
             ctx.restore();
+
+            this.ctxSVG.restore();
+
         }
     }
 
     this.drawSubdomains = function() {
         let angle = 45;
+
         ctx.fillStyle = "black";
+        this.ctxSVG.fillStyle = "black";
+
         let fontSize = 15;
         ctx.font = fontSize + "pt Arial";
+        this.ctxSVG.font = fontSize + "pt Arial";
+
         for (let j = 0; j < this.domains.length; j++) {
             let domain = this.domains[j];
+            let dt = domain.name.toUpperCase();
 
             ctx.save();
             ctx.translate(x, y);
+
+            this.ctxSVG.save();
+            this.ctxSVG.translate(x, y);
 
             // let correctedAngle = (j * Math.PI / 2) - ((Math.PI / 4)) - radiusCorrection;
             // ctx.rotate(correctedAngle);
@@ -357,6 +513,7 @@ Assessment.GenericCircle = function( ctx, config ) {
                   vertDirection = -1;
                   vertOffset = 0;
                   ctx.textAlign = 'left';
+                  this.ctxSVG.textAlign = 'left';
                     break;
                 case 1:
                   sx = x * 0.95;
@@ -364,34 +521,60 @@ Assessment.GenericCircle = function( ctx, config ) {
                   vertDirection = 1;
                   vertOffset = 0;
                   ctx.textAlign = 'right';
-                    break;
+                  this.ctxSVG.textAlign = 'right';
+                  break;
                 case 2:
                   sx = x * 0.95;
                   sy = y * 0.6;
                   vertDirection = 1;
                   vertOffset = -lineOffset * 6;
                   ctx.textAlign = 'right';
-                    break;
+                  this.ctxSVG.textAlign = 'right';
+                  break;
                 case 3:
                   sx = -x * 0.95;
                   sy = y * 0.6;
                   vertDirection = -1;
                   vertOffset = -lineOffset * 6;
                   ctx.textAlign = 'left';
-                    break;
+                  this.ctxSVG.textAlign = 'left';
+                  break;
             }
+
+            ctx.font = (fontSize + 3) + "pt Arial";
+            this.ctxSVG.font = (fontSize + 3) + "pt Arial";
+
+            ctx.fillText(dt, sx, sy + vertOffset - (fontSize + 3) * 1.5);
+            this.ctxSVG.fillText(dt, sx, sy + vertOffset - (fontSize + 3) * 1.5);
+
+            ctx.font = fontSize + "pt Arial";
+            this.ctxSVG.font = fontSize + "pt Arial";
+
             for (i = 0; i < subdomains.length; i++) {
               let index = vertDirection == -1 ? 6 - i : i;
               let text = subdomains[ index ];
+
               ctx.save();
-              if ( this.currentSubdomainId == index && this.currentDomainId == j )
+              this.ctxSVG.save();
+
+              if ( this.currentSubdomainId == index && this.currentDomainId == j ) {
                 ctx.fillStyle = Assessment.domainColour;
-              else
+                this.ctxSVG.fillStyle = Assessment.domainColour;
+              }
+              else {
                 ctx.fillStyle = "black";
+                this.ctxSVG.fillStyle = "black";
+              }
+
               ctx.fillText(text, sx, sy + vertOffset + (i * lineOffset));
               ctx.restore();
+
+              this.ctxSVG.fillText(text, sx, sy + vertOffset + (i * lineOffset));
+              this.ctxSVG.restore();
+
             }
             ctx.restore();
+            this.ctxSVG.restore();
         }
     }
 
@@ -399,6 +582,15 @@ Assessment.GenericCircle = function( ctx, config ) {
     this.drawCompleteCircle = function() {
         // Draw segments lines
         ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, width, height);
+
+        this.ctxSVG = new C2S(width, height);
+        this.ctxSVG.clearRect(0, 0, width, height);
+        this.ctxSVG.fillStyle = "white";
+        this.ctxSVG.fillRect(0, 0, width, height);
+
+
         for (let i = 0; i < this.values.length; i++) {
             let domainValues = this.values[i];
             for (let j = 0; j < domainValues.length; j++) {
@@ -408,8 +600,8 @@ Assessment.GenericCircle = function( ctx, config ) {
 
         // Draw 28 - 4 segment lines
         this.drawSegmentLines();
-        this.drawCircles();
         this.drawAxes();
+        this.drawCircles();
 
         if (drawDomains) {
           this.drawDomains();
@@ -579,4 +771,9 @@ Assessment.circleFactory = Assessment.GenericCircle;
 Assessment.propTypes = {
   router: PropTypes.object.isRequired,
   isInteractive: PropTypes.bool.isRequired,
+  // This component gets the assessment to display through a React prop.
+  // We can use propTypes to indicate it is required
+  assessment: PropTypes.object.isRequired,
+  circle: PropTypes.object,
+
 };
